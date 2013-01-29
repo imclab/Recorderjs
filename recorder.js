@@ -1,9 +1,15 @@
-(function(window){
+define(['module'], function(module){
 
-  var WORKER_PATH = 'js/recorderjs/recorderWorker.js';
+  function getFolder(fullPath){
+    var slashIndex = fullPath.lastIndexOf('/');
+    return fullPath.substr(0, slashIndex);
+  }
+
+  var WORKER_PATH = getFolder(module.uri) + '/recorderWorker.js';
 
   var Recorder = function(source, cfg){
-    var config = cfg || {};
+
+    var config = cfg || {isMono: false};
     var bufferLen = config.bufferLen || 4096;
     this.context = source.context;
     this.node = this.context.createJavaScriptNode(bufferLen, 2, 2);
@@ -14,8 +20,7 @@
         sampleRate: this.context.sampleRate
       }
     });
-    var recording = false,
-      currCallback;
+    var recording = false, currCallback;
 
     this.node.onaudioprocess = function(e){
       if (!recording) return;
@@ -34,24 +39,28 @@
           config[prop] = cfg[prop];
         }
       }
-    }
+    };
+
+    this.isMono = function(value){
+      config.isMono = value;
+    };
 
     this.record = function(){
       recording = true;
-    }
+    };
 
     this.stop = function(){
       recording = false;
-    }
+    };
 
     this.clear = function(){
       worker.postMessage({ command: 'clear' });
-    }
+    };
 
     this.getBuffer = function(cb) {
       currCallback = cb || config.callback;
       worker.postMessage({ command: 'getBuffer' })
-    }
+    };
 
     this.exportWAV = function(cb, type){
       currCallback = cb || config.callback;
@@ -59,9 +68,20 @@
       if (!currCallback) throw new Error('Callback not set');
       worker.postMessage({
         command: 'exportWAV',
+        type: type,
+        isMono: config.isMono
+      });
+    };
+
+    this.exportFLAC = function(cb, type){
+      currCallback = cb || config.callback;
+      type = type || config.type || 'audio/x-flac';
+      if (!currCallback) throw new Error('Callback not set');
+      worker.postMessage({
+        command: 'exportFLAC',
         type: type
       });
-    }
+    };
 
     worker.onmessage = function(e){
       var blob = e.data;
@@ -82,6 +102,5 @@
     link.dispatchEvent(click);
   }
 
-  window.Recorder = Recorder;
-
-})(window);
+  return Recorder;
+});

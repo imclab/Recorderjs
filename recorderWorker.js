@@ -12,7 +12,7 @@ this.onmessage = function(e){
       record(e.data.buffer);
       break;
     case 'exportWAV':
-      exportWAV(e.data.type);
+      exportWAV(e.data.type, e.data.isMono);
       break;
     case 'getBuffer':
       getBuffer();
@@ -33,11 +33,20 @@ function record(inputBuffer){
   recLength += inputBuffer[0].length;
 }
 
-function exportWAV(type){
+function exportWAV(type, isMono){
+  // TODO: 
+  //  var splitter = audioContext.createChannelSplitter(2);
+  //  var merger = audioContext.createChannelMerger(2);
+
+  //  input.connect( splitter );
+  //  splitter.connect( merger, 0, 0 );
+  //  splitter.connect( merger, 0, 1 );
   var bufferL = mergeBuffers(recBuffersL, recLength);
-  var bufferR = mergeBuffers(recBuffersR, recLength);
-  var interleaved = interleave(bufferL, bufferR);
-  var dataview = encodeWAV(interleaved);
+  if (isMono){
+    var bufferR = mergeBuffers(recBuffersR, recLength);
+    var interleaved = interleave(bufferL, bufferR);
+  }
+  var dataview = encodeWAV(bufferL, isMono);
   var audioBlob = new Blob([dataview], { type: type });
 
   this.postMessage(audioBlob);
@@ -94,12 +103,49 @@ function writeString(view, offset, string){
   }
 }
 
-function encodeWAV(samples){
+function encodeWAV(samples, isMono){
   var buffer = new ArrayBuffer(44 + samples.length * 2);
   var view = new DataView(buffer);
+  var factor = isMono?1:2;
 
   /* RIFF identifier */
   writeString(view, 0, 'RIFF');
+  /* file length */
+  view.setUint32(4, 32 + samples.length * 2, true);
+  /* RIFF type */
+  writeString(view, 8, 'WAVE');
+  /* format chunk identifier */
+  writeString(view, 12, 'fmt ');
+  /* format chunk length */
+  view.setUint32(16, 16, true);
+  /* sample format (raw) */
+  view.setUint16(20, 1, true);
+  /* channel count */
+  view.setUint16(22, factor, true);
+  /* sample rate */
+  view.setUint32(24, sampleRate, true);
+  /* byte rate (sample rate * block align) */
+  view.setUint32(28, sampleRate * 2 * factor, true);
+  /* block align (channel count * bytes per sample) */
+  view.setUint16(32, 4, true);
+  /* bits per sample */
+  view.setUint16(34, 16, true);
+  /* data chunk identifier */
+  writeString(view, 36, 'data');
+  /* data chunk length */
+  view.setUint32(40, samples.length * 2, true);
+
+  floatTo16BitPCM(view, 44, samples);
+
+  return view;
+}
+
+function encodeFLAC(samples){
+  var buffer = new ArrayBuffer(44 + samples.length * 2);
+  var view = new DataView(buffer);
+
+  /* fLaC identifier */
+  writeString(view, 0, 'fLaC');
   /* file length */
   view.setUint32(4, 32 + samples.length * 2, true);
   /* RIFF type */
