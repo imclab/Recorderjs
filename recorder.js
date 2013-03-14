@@ -84,6 +84,11 @@ define(['module'], function(module){
       });
     };
 
+    this.dispose = function(){
+      source.disconnect();
+      this.node.disconnect();
+    };
+
     worker.onmessage = function(e){
       var blob = e.data;
       currCallback(blob);
